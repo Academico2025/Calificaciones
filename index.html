@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>App de Calificaciones (Excel-Idéntica)</title>
+<!-- XLSX (SheetJS) para exportación e importación a Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- PDF + Canvas para exportar el boletín a PDF (tamaño carta) -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<!-- ExcelJS para exportar XLSX con formato tipo boletín -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<!-- JsBarcode para código de barras en certificado -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<link rel="stylesheet" href="SNVersionSSAFinal.css">
+</head>
+<body>
+<header>
+<div class="wrap">
+<div class="top">
+<div class="brand">
+<div class="logo"></div>
+<div>
+<h1>Sistema de Calificaciones Escolares</h1>
+<div class="sub">Boletines y Certificados por grado</div>
+<div class="pill" id="activeIEBadge" style="margin-top:6px">IE: <strong class="mono">—</strong></div>
+</div>
+</div>
+<nav>
+<button class="tab" onclick="openIESwitcher()" type="button">IE / Perfiles</button>
+<button class="tab active" data-view="dashboard">Dashboard</button>
+<button class="tab" data-view="students">Estudiantes</button>
+<button class="tab" data-view="areas">Áreas</button>
+<button class="tab" data-view="gradebook">Planillas por Área</button>
+<button class="tab" data-view="areaFinal">Final por Área</button>
+<button class="tab" data-view="generator">Generador Final</button>
+<button class="tab" data-view="certificates">Certificados</button>
+<button class="tab" data-view="settings">Configuración</button>
+</nav>
+</div>
+</div>
+</header>
+<main class="wrap">
+<!-- DASHBOARD -->
+<section class="grid" id="view-dashboard">
+<div class="card">
+<div class="hd">
+<h2>Resumen</h2>
+<span class="pill">Periodo(s): <strong id="kPeriods">-</strong></span>
+</div>
+<div class="bd">
+<div class="kpi">
+<div class="box"><div class="v" id="kStudents">0</div><div class="k">Estudiantes</div></div>
+<div class="box"><div class="v" id="kAreas">0</div><div class="k">Áreas</div></div>
+<div class="box"><div class="v" id="kEntries">0</div><div class="k">Registros de calificación</div></div>
+<div class="box"><div class="v" id="kUpdated">—</div><div class="k">Última actualización</div></div>
+</div>
+<div class="hr"></div>
+<div class="note">
+          Ajustes Generales (con configuración por periodo):
+          <br/>• <b>SUMA TOTAL (ST)</b> = PROMEDIOS, (si no hay notas válidas, queda vacío).
+          <br/>• <b>RECUPERACIÓN (REC).</b> Disponible <b>Para colocar si se hace el proceso</b>.
+          <br/>• <b>NOTA DEFINITIVA</b> = ST(PROCEDIMENTAL)-% + ST(CONCEPTUAL)-% + ST(ACTITUDINAL)-% (según configuración del periodo).
+          <br/>• FINAL_AREA: definitiva = PROMEDIOS (periodos").
+          <br/>• GENERADOR_FINAL: definitiva anual = promedio simple de las definitivas anuales por área.
+          <br/>• BOLETÍN POR PERIODO: formato de impresión PDF.
+          <br/>• CERTIFICADOS: formato de impresión PDF.
+        </div>
+<div class="hr"></div>
+<div class="row">
+<button class="btn primary" onclick="go('students')">Ir a Estudiantes</button>
+<button class="btn primary" onclick="go('areas')">Crear/Editar Áreas</button>
+<button class="btn" onclick="go('gradebook')">Calificar por Área</button>
+<button class="btn" onclick="go('generator')">Ver Generador Final</button>
+</div>
+</div>
+</div>
+<div class="card">
+<div class="hd"><h2>Acciones rápidas</h2></div>
+<div class="bd">
+<div class="two">
+<div>
+<label>Buscar estudiante</label>
+<input id="quickStudent" oninput="quickSearchStudent()" placeholder="Escribe nombre o identificación..."/>
+<div class="small" id="quickStudentResult">—</div>
+</div>
+<div>
+<label>Buscar área</label>
+<input id="quickArea" oninput="quickSearchArea()" placeholder="Escribe nombre del área..."/>
+<div class="small" id="quickAreaResult">—</div>
+</div>
+</div>
+<div class="hr"></div>
+<div class="row">
+<button class="btn danger" onclick="resetAll()">Borrar todo</button>
+</div>
+<div class="hr"></div>
+<div class="row">
+<button class="btn primary" onclick="exportListadoEstudiantesXLSX()">EXPORTAR LISTADO ESTUDIANTES.xlsx</button>
+</div>
+</div>
+</div>
+</section>
+<!-- STUDENTS -->
+<section class="grid hide" id="view-students">
+<div class="card">
+<div class="hd"><h2>Agregar estudiante</h2><span class="pill">LISTADO_ESTUDIANTES.xlsx</span></div>
+<div class="bd">
+<div class="two">
+<div><label>Apellidos y nombres</label><input id="stName" placeholder="Ej: PÉREZ GÓMEZ JUAN DAVID"/></div>
+<div><label>Identificación</label><input id="stId" placeholder="Ej: 1234567890"/></div>
+<div><label>Grado</label><input id="stGrade" placeholder="Ej: 3-5 / 5A / 11-2"/></div>
+<div><label>Código interno (opcional)</label><input id="stCode" placeholder="Ej: 0001"/></div>
+</div>
+<div class="row" style="margin-top:10px">
+<button class="btn primary" onclick="addStudent()">Guardar estudiante</button>
+<button class="btn" onclick="clearStudentForm()">Limpiar datos estudiantes</button>
+</div>
+<div class="hr"></div>
+<div class="row">
+<button class="btn primary" onclick="exportListadoEstudiantesXLSX()">Exportar lista estudiantes.xlsx</button>
+</div>
+<!-- NUEVO: IMPORTAR XLSX (solo estudiantes) -->
+<div class="row" style="margin-top:10px">
+<input accept=".xlsx" class="hide" id="stImportFile" onchange="importStudentsFromXLSX(event)" type="file"/>
+<button class="btn" onclick="document.getElementById('stImportFile').click()">Importar lista estudiantes.xlsx</button>
+</div>
+</div>
+</div>
+<div class="card">
+<div class="hd">
+<h2>Listado de estudiantes</h2>
+<div class="flex">
+<input id="stFilter" oninput="renderStudents()" placeholder="Filtrar..." style="width:220px">
+<button class="btn" onclick="sortStudents()">Ordenar A→Z</button>
+</input></div>
+</div>
+<div class="bd">
+<div class="twrap">
+<table>
+<thead>
+<tr>
+<th>Nº</th>
+<th>APELLIDOS Y NOMBRES</th>
+<th>IDENTIFICACION</th>
+<th>GRADO</th>
+<th>CÓDIGO</th>
+<th class="right">Acciones</th>
+</tr>
+</thead>
+<tbody id="studentsTbody"></tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<!-- AREAS -->
+<section class="grid hide" id="view-areas">
+<div class="card">
+<div class="hd"><h2>Crear área / asignatura</h2><span class="pill">AREAS.xlsx</span></div>
+<div class="bd">
+<div class="two">
+<div><label>Nombre del área</label><input id="arName" placeholder="Ej: MATEMÁTICAS"/></div>
+<div><label>IHS (Intensidad horaria)</label><input class="num" id="arIhs" placeholder="Ej: 5"/></div>
+<div><label>Docente (opcional)</label><input id="arTeacher" placeholder="Ej: Prof. Ana Torres"/></div>
+<div><label>Observaciones (opcional)</label><input id="arObs" placeholder="—"/></div>
+</div>
+<div class="row" style="margin-top:10px">
+<button class="btn primary" onclick="addArea()">Guardar área</button>
+<button class="btn" onclick="clearAreaForm()">Limpiar</button>
+</div>
+<div class="hr"></div>
+<div class="note">
+          Crear y guardar cada área Manualmente para mejor experiencia.
+        </div>
+</div>
+</div>
+<div class="card">
+<div class="hd"><h2>Áreas registradas</h2><div class="flex"><input id="arFilter" oninput="renderAreas()" placeholder="Filtrar..." style="width:220px"/></div></div>
+<div class="bd">
+<div class="twrap">
+<table>
+<thead>
+<tr>
+<th>Área</th><th class="center">IHS</th><th>Docente</th><th>Obs</th><th class="right">Acciones</th>
+</tr>
+</thead>
+<tbody id="areasTbody"></tbody>
+</table>
+</div>
+</div>
+</div>
+</section>
+<!-- GRADEBOOK -->
+<section class="grid hide" id="view-gradebook">
+<div class="card">
+<div class="hd">
+<div>
+<h2>Planilla por Área / Periodo</h2>
+<div class="sub">Importa notas desde una planilla Excel (.xlsx) con el mismo formato de AREAS.xlsx.</div>
+</div>
+<div class="hd-actions">
+<span class="pill">Importar Planillas.xlsx</span>
+<button class="btn primary" onclick="openPlanillasImport()" type="button">Importar planillas (.xlsx)</button>
+<input accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" id="planillasFile" onchange="handlePlanillasImport(this.files &amp;&amp; this.files[0])" style="display:none" type="file"/>
+</div>
+</div>
+<div class="bd" style="padding-top:0">
+<div class="note" id="planillasImportMsg" style="display:none"></div>
+</div>
+<div class="bd">
+<div class="two">
+<div>
+<label>Selecciona área</label>
+<select id="gbArea" onchange="renderGradebook()"></select>
+</div>
+<div>
+<label>Periodo</label>
+<select id="gbPeriod" onchange="renderGradebook()"></select>
+</div>
+<div>
+<label>Filtrar estudiantes</label>
+<input id="gbFilter" oninput="renderGradebookRows()" placeholder="Nombre o ID...">
+</input></div>
+<div>
+<label>Acciones</label>
+<div class="row">
+<button class="btn" onclick="recalcAllVisible()">Recalcular datos</button>
+<button class="btn primary" onclick="saveAllVisible()">Guardar datos</button>
+<button class="btn primary" onclick="exportPlanillaActualXLSX()">Exportar Áreas con notas.xlsx</button>
+</div>
+</div>
+</div>
+<div class="hr"></div>
+<div class="note" id="gbCfgNote">
+          —
+        </div>
+</div>
+</div>
+<div class="card">
+<div class="hd">
+<h2>Planilla</h2>
+<div class="flex">
+<span class="chip"><span class="dot"></span><span id="gbMeta">—</span></span>
+<span class="chip tag-good"><span class="dot"></span><span>D. SUPERIOR ≥ 4.6</span></span>
+<span class="chip tag-warn"><span class="dot"></span><span>D. ALTO ≥ 4.0</span></span>
+<span class="chip"><span class="dot"></span><span>D. BASICO ≥ 3.0</span></span>
+<span class="chip tag-bad"><span class="dot"></span><span>D. BAJO &lt; 3.0</span></span>
+</div>
+</div>
+<div class="bd">
+<div class="twrap" id="gbTableWrap"></div>
+</div>
+</div>
+</section>
+<!-- FINAL POR AREA -->
+<section class="grid hide" id="view-areaFinal">
+<div class="card">
+<div class="hd"><h2>Consolidado Final por Área</h2><span class="pill">FINAL_AREA.xlsx</span></div>
+<div class="bd">
+<div class="two">
+<div><label>Selecciona área</label><select id="faArea" onchange="renderFinalArea()"></select></div>
+<div><label>Filtrar estudiantes</label><input id="faFilter" oninput="renderFinalArea()" placeholder="Nombre o ID..."/></div>
+</div>
+<div class="hr"></div>
+<div class="row">
+<button class="btn primary" onclick="exportFinalAreaActualXLSX()">Exportar FINAL_AREA_...xlsx</button>
+</div>
+<div class="hr"></div>
+<div class="note">
+          FINAL_AREA: NOTA DEFINITIVA = Promedios por periodos y escala.
+</div>
+</div>
+</div>
+<div class="card">
+<div class="hd"><h2>Tabla final del área</h2></div>
+<div class="bd">
+<div class="twrap" id="faTableWrap"></div>
+</div>
+</div>
+</section>
+<!-- GENERADOR -->
+<section class="grid hide" id="view-generator">
+<div class="card">
+<div class="hd"><h2>Generador Final (Boletín)</h2><span class="pill">Formato Boletín (PDF)</span></div>
+<div class="bd">
+<div class="two">
+<div><label>Selecciona estudiante</label><select id="genStudent" onchange="renderGenerator()"></select></div>
+<div>
+<label>Modo</label>
+<select id="genMode" onchange="renderGenerator()">
+<option value="final">FINAL (todos los periodos)</option>
+<option value="period">Un periodo específico</option>
+</select>
+</div>
+<div id="genPeriodBox">
+<label>Periodo</label>
+<select id="genPeriod" onchange="renderGenerator()"></select>
+</div>
+<div>
+<label>Acciones</label>
+<div class="b-actions">
+<button class="btn primary" onclick="exportBoletinPDFGeneradorFinal()">Exportar Boletín PDF</button>
+<button class="btn" onclick="printBoletin()">Imprimir</button>
+</div>
+</div>
+</div>
+<div class="hr"></div>
+<div class="two">
+<div>
+<label>Jornada</label>
+<select id="setJornada" onchange="saveBoletinSettings()">
+<option value="MAÑANA">MAÑANA</option>
+<option value="TARDE">TARDE</option>
+<option value="NOCHE">NOCHE</option>
+<option value="ÚNICA">ÚNICA</option>
+</select>
+</div>
+<div>
+<label>Año lectivo</label>
+<input id="setYear" oninput="saveBoletinSettings()" placeholder="Ej: 2025"/>
+</div>
+<div>
+<label>Grupo (opcional)</label>
+<input id="setGrupo" oninput="saveBoletinSettings()" placeholder="Ej: 3A / 3-1"/>
+</div>
+<div>
+<label>Fecha del boletín</label>
+<input id="setFechaBoletin" oninput="saveBoletinSettings()" placeholder="DD/MM/AAAA"/>
+</div>
+</div>
+<div class="hr"></div>
+<div class="two">
+<div>
+<label>Promovido</label>
+<select id="setPromovido" onchange="saveBoletinSettings()">
+<option value=""></option>
+<option value="ND">ND (NO DEFINIDO)</option>
+<option value="SI">SI</option>
+<option value="NO">NO</option>
+</select>
+</div>
+<div>
+<label>Al grado (si NO)</label>
+<input id="setAlGrado" oninput="saveBoletinSettings()" placeholder="Ej: 3°"/>
+</div>
+</div>
+<div class="hr"></div>
+<div class="two">
+<div>
+<label>Actividades de mejoramiento</label>
+<textarea id="setActMej" oninput="saveBoletinSettings()" placeholder="—"></textarea>
+</div>
+<div>
+<label>Observaciones</label>
+<textarea id="setObsBoletin" oninput="saveBoletinSettings()" placeholder="—"></textarea>
+</div>
+</div>
+<div class="hr"></div>
+<div class="note">
+          Boletín con estructura del PDF: encabezado institucional, tabla central por áreas con inasistencia, periodos, definitiva anual,
+          bloque “TIPO DE FALTAS”, “TOTAL IHS”, “PROMOVIDO”, y leyenda de desempeños.
+        </div>
+</div>
+</div>
+<div class="card">
+<div class="hd"><h2>Vista del Boletín</h2></div>
+<div class="bd">
+<div class="twrap" id="genTableWrap"></div>
+</div>
+</div>
+</section>
+<!-- CERTIFICADOS -->
+<section class="grid hide" id="view-certificates">
+<div class="card">
+<div class="hd"><h2>Certificados</h2><span class="pill">Formato tipo certificado (PDF)</span></div>
+<div class="bd">
+<div class="two">
+<div>
+<label>Selecciona estudiante</label>
+<select id="certStudent" onchange="renderCertificate()"></select>
+</div>
+<div>
+<label>Acciones</label>
+<div class="b-actions">
+<button class="btn primary" onclick="exportCertificadoPDF()">Exportar PDF</button>
+<button class="btn" onclick="printCertificado()">Imprimir</button>
+</div>
+</div>
+</div>
+<div class="hr"></div>
+<div class="note">
+          El certificado toma los datos del <b>Generador Final</b>: áreas registradas, IHS, definitiva anual por área (promedio simple de los periodos) y nivel de desempeño.
+          </div>
+</div>
+</div>
+<div class="card">
+<div class="hd"><h2>Vista del certificado</h2></div>
+<div class="bd">
+<div class="twrap" id="certWrap"></div>
+</div>
+</div>
+</section>
+<!-- SETTINGS -->
+<section class="grid hide" id="view-settings">
+<div class="card">
+<div class="hd"><h2>Configuración general</h2></div>
+<div class="bd">
+<div class="two">
+<div>
+<label>Número de periodos al año</label>
+<select id="setPeriods" onchange="setPeriods()">
+<option value="2">2 periodos</option>
+<option value="3">3 periodos</option>
+<option value="4">4 periodos</option>
+</select>
+</div>
+<div><label>Institución (opcional) — texto libre</label><input id="setInstitution" oninput="saveSettings()" placeholder="Ej: INSTITUCIÓN EDUCATIVA ..."/></div>
+<div><label>Municipio (para encabezados)</label><input id="setMunicipio" oninput="saveSettings()" placeholder="Ej: Balboa"/></div>
+<div><label>Departamento (para encabezados)</label><input id="setDepto" oninput="saveSettings()" placeholder="Ej: Cauca"/></div>
+<div style="grid-column: 1 / -1;"><label>Resolución de aprobación de estudios (opcional)</label><input id="setPlace" oninput="saveSettings()" placeholder="Ej: BALBOA CAUCA"/></div>
+<div><label>Grado/Curso global (opcional)</label><input id="setGradeGlobal" oninput="saveSettings()" placeholder="Ej: 3-5"/></div>
+<!-- configuración por periodo -->
+<div style="grid-column: 1 / -1;">
+<div class="hr"></div>
+<div class="note">
+<b>Configuración por periodo:</b> puedes cambiar <b>porcentajes</b> de PROCEDIMENTAL / CONCEPTUAL / ACTITUDINAL y la cantidad de notas N1..N? para PROCEDIMENTAL y CONCEPTUAL.
+              <br/>• ACTITUDINAL queda igual (DOC., EST. y AE opcional según formato), solo cambia el porcentaje.
+              <br/>• Los cálculos de SUMA TOTAL (ST) usan PROMEDIO DE LAS NOTAS Y PORCENTAJE.
+            </div>
+</div>
+<div style="grid-column: 1 / -1;">
+<label>Tabla de configuración por periodo</label>
+<div class="twrap">
+<table>
+<thead>
+<tr>
+<th class="center">PERIODO</th>
+<th class="center">PROCEDIMENTAL %</th>
+<th class="center">CONCEPTUAL %</th>
+<th class="center">ACTITUDINAL %</th>
+<th class="center"># NOTAS PR (N1..N?)</th>
+<th class="center"># NOTAS CO (N1..N?)</th>
+<th class="center">Acción</th>
+</tr>
+</thead>
+<tbody id="periodCfgTbody"></tbody>
+</table>
+</div>
+<div class="small" style="margin-top:8px">
+              Recomendación: que la suma de porcentajes sea 100%. Si no suma 100%, el sistema NO ajusta automáticamente (se calcula tal cual).
+            </div>
+</div>
+<!-- Fechas por periodo -->
+<div style="grid-column: 1 / -1; margin-top:10px">
+<div class="hr"></div>
+<div style="margin:6px 0 8px"><b>Fechas por periodo</b></div>
+<div class="table">
+<table>
+<thead>
+<tr>
+<th class="center">Periodo</th>
+<th class="center">Inicio</th>
+<th class="center">Fin</th>
+</tr>
+</thead>
+<tbody id="periodDatesTbody"></tbody>
+</table>
+</div>
+<div class="small" style="margin-top:8px">Estas fechas se muestran únicamente en el Boletín cuando se genera por periodo.</div>
+</div>
+<!-- Encabezado boletín -->
+<div style="grid-column: 1 / -1;">
+<div class="hr"></div>
+<div class="note"><b>Encabezado del Boletín:</b> Escudo, Nombre IE, NIT y DANE (quedan guardados en el navegador).</div>
+</div>
+<div><label>Nombre IE (para encabezado del boletín)</label><input id="setIEName" oninput="saveSettings()" placeholder="Ej: INSTITUCIÓN EDUCATIVA XYZ"/></div>
+<div><label>NIT</label><input id="setNIT" oninput="saveSettings()" placeholder="Ej: 900.000.000-0"/></div>
+<div><label>DANE</label><input id="setDANE" oninput="saveSettings()" placeholder="Ej: 123456789"/></div>
+<div>
+<label>Escudo IE (JPG/PNG)</label>
+<input accept="image/png,image/jpeg" id="setShieldFile" onchange="handleImageUpload(event,'shield')" type="file"/>
+<div class="row" style="margin-top:8px">
+<button class="btn danger" onclick="clearImage('shield')">Quitar escudo</button>
+</div>
+<div class="hr"></div>
+<div class="imgprev"><img alt="Escudo (preview)" id="prevShield"/></div>
+</div>
+<!-- Firmas / Sellos -->
+<div style="grid-column: 1 / -1;">
+<div class="hr"></div>
+<div class="note"><b>Firmas y Sellos:</b> Rector y Docente Director de Grupo.</div>
+</div>
+<div><label>Nombre del Rector</label><input id="setRectorName" oninput="saveSettings()" placeholder="Ej: NOMBRE APELLIDO"/></div>
+<div><label>Nombre Docente Director de Grupo</label><input id="setDirName" oninput="saveSettings()" placeholder="Ej: NOMBRE APELLIDO"/></div>
+<div>
+<label>Firma Rector (JPG/PNG)</label>
+<input accept="image/png,image/jpeg" id="setRectorSignFile" onchange="handleImageUpload(event,'rectorSign')" type="file"/>
+<div class="row" style="margin-top:8px">
+<button class="btn danger" onclick="clearImage('rectorSign')">Quitar firma</button>
+</div>
+<div class="hr"></div>
+<div class="imgprev"><img alt="Firma rector (preview)" id="prevRectorSign"/></div>
+</div>
+<div>
+<label>Sello Rector (JPG/PNG)</label>
+<input accept="image/png,image/jpeg" id="setRectorSealFile" onchange="handleImageUpload(event,'rectorSeal')" type="file"/>
+<div class="row" style="margin-top:8px">
+<button class="btn danger" onclick="clearImage('rectorSeal')">Quitar sello</button>
+</div>
+<div class="hr"></div>
+<div class="imgprev"><img alt="Sello rector (preview)" id="prevRectorSeal"/></div>
+</div>
+<div>
+<label>Firma Docente Director de Grupo (JPG/PNG)</label>
+<input accept="image/png,image/jpeg" id="setDirSignFile" onchange="handleImageUpload(event,'dirSign')" type="file"/>
+<div class="row" style="margin-top:8px">
+<button class="btn danger" onclick="clearImage('dirSign')">Quitar firma</button>
+</div>
+<div class="hr"></div>
+<div class="imgprev"><img alt="Firma director grupo (preview)" id="prevDirSign"/></div>
+</div>
+<div>
+<label>Sello Docente Director de Grupo (JPG/PNG)</label>
+<input accept="image/png,image/jpeg" id="setDirSealFile" onchange="handleImageUpload(event,'dirSeal')" type="file"/>
+<div class="row" style="margin-top:8px">
+<button class="btn danger" onclick="clearImage('dirSeal')">Quitar sello</button>
+</div>
+<div class="hr"></div>
+<div class="imgprev"><img alt="Sello director grupo (preview)" id="prevDirSeal"/></div>
+</div>
+</div>
+<div class="hr"></div>
+<div class="two">
+<div>
+<label>Diagnóstico de integridad</label>
+<button class="btn" onclick="runIntegrity()">Ejecutar validación</button>
+<div class="hr"></div>
+<pre class="mono small" id="integrityOut" style="white-space:pre-wrap; margin:0">—</pre>
+</div>
+<div>
+<label>Acción de seguridad</label>
+<div class="note">
+              Para respaldo/traslado, exporta tus reportes XLSX (LISTADO_ESTUDIANTES, AREAS, FINAL_AREA, GENERADOR_FINAL).
+              <br/><br/>
+              Recomendado: usa un respaldo completo en <b>JSON</b> para restaurar esta base (incluye configuración, estudiantes, áreas, notas y firmas/sellos).
+            </div>
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0 12px">
+<button class="btn" onclick="exportBackupJSON()" type="button">Exportar respaldo (JSON)</button>
+<button class="btn" onclick="openImportBackupJSON()" type="button">Restaurar respaldo (JSON)</button>
+<button class="btn danger" onclick="resetAll()" type="button">Borrar todo</button>
+<input accept=".json,application/json" id="backupJsonFile" onchange="importBackupJSON(this.files &amp;&amp; this.files[0])" style="display:none" type="file"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<script src="SNVersionSSAFinal.js"></script>
+<!-- MODAL: Cambio de IE / LS_KEY -->
+<div aria-hidden="true" class="modal hide" id="ieModal">
+<div class="modal-backdrop" onclick="closeIESwitcher()"></div>
+<div aria-label="Cambio de Institución" aria-modal="true" class="modal-card" role="dialog">
+<div class="modal-hd">
+<div>
+<div style="font-weight:800">Cambiar Institución (LS_KEY)</div>
+<div class="small">Cada IE guarda su información por separado en este navegador. Cambia el LS_KEY para evitar mezclar datos.</div>
+</div>
+<div class="flex">
+<button class="btn" onclick="closeIESwitcher()" type="button">Cerrar</button>
+</div>
+</div>
+<div class="modal-bd">
+<div class="note">IE activa: <b class="mono" id="ieCurrentKey">—</b></div>
+<div class="two" style="margin-top:10px">
+<div>
+<label>Elegir una IE existente</label>
+<select id="ieKeySelect"></select>
+</div>
+<div>
+<label>Nombre amigable (opcional)</label>
+<input id="ieKeyName" placeholder="Ej: I.E. San Nicolás — Putumayo"/>
+</div>
+<div style="grid-column: 1 / -1;">
+<label>LS_KEY (código único de la IE)</label>
+<input id="ieKeyInput" placeholder="Ej: CAL_APP_DB_DANE_123456789"/>
+<div class="small" style="margin-top:6px">
+            Sugerencia: usa DANE o NIT, por ejemplo <span class="mono">CAL_APP_DB_DANE_123456789</span> o <span class="mono">CAL_APP_DB_NIT_9000000000</span>.
+          </div>
+</div>
+</div>
+<div class="row" style="margin-top:12px">
+<button class="btn primary" onclick="applyIESwitcher()" type="button">Usar esta IE</button>
+<button class="btn danger" onclick="deleteCurrentIEData()" type="button">Borrar datos de esta IE</button>
+</div>
+<div class="hr"></div>
+<div class="note">
+<b>Importante:</b> al cambiar de IE, la aplicación se recarga y abre la base de datos correspondiente a ese LS_KEY.
+        Tus datos anteriores NO se mezclan, quedan guardados en su propio LS_KEY.
+      </div>
+</div>
+</div>
+</div>
+</body>
+</html>
